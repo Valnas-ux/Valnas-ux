@@ -85,6 +85,7 @@
 <script>
 const tg = window.Telegram?.WebApp;
 tg?.ready(); tg?.expand(); tg?.setHeaderColor?.("#0e0a1c"); tg?.setBackgroundColor?.("#0e0a1c");
+tg?.disableVerticalSwipes?.();  // чтобы при листании колоды приложение не закрывалось случайным свайпом вниз
 const P = new URLSearchParams(location.search);
 const deck = (P.get("d") || "").split(",").filter(Boolean);       // порядок 78 карт — перетасован ботом под вопрос
 const names = typeof NAMES === "object" ? NAMES : {};  // код → русское название (names.js)
@@ -109,7 +110,8 @@ const slots = document.getElementById("slots");
 const slotEls = labels.slice(0, need).map(l => {
   const el = document.createElement("div"); el.className = "slot";
   el.innerHTML = `<div class="frame"><div class="flip" style="opacity:0"><div class="backside"></div><div class="face"></div></div></div>
-                  <div class="label">${l}</div><div class="name"></div>`;
+                  <div class="label"></div><div class="name"></div>`;
+  el.querySelector(".label").textContent = l;
   slots.appendChild(el); return el;
 });
 
