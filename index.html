@@ -1,10 +1,190 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <title>Обмен Telegram</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Колода Таро</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="names.js"></script>
+<style>
+  @font-face { font-family: "Gatchina"; src: url("gatchina-bold.ttf"); font-weight: 700; }
+  @font-face { font-family: "Gatchina"; src: url("gatchina.ttf"); font-weight: 400; }
+  :root {
+    --bg: #0e0a1c; --bg2: #2a1650; --gold: #e8c478; --gold-soft: rgba(232, 196, 120, .35); --text: #fff4de; --dim: #c8bedc;
+    --card-w: 92px; --card-h: 158px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
+    font-family: "Gatchina", Georgia, serif; }
+  body { background: radial-gradient(ellipse at 50% 38%, var(--bg2) 0%, var(--bg) 70%); }
+  #stars { position: fixed; inset: 0; pointer-events: none; }
+  .star { position: absolute; width: 2px; height: 2px; border-radius: 50%; background: #fff; opacity: .2;
+    animation: twinkle var(--t) ease-in-out infinite; animation-delay: var(--d); }
+  @keyframes twinkle { 50% { opacity: .95; transform: scale(1.6); } }
+
+  main { position: relative; height: 100%; display: flex; flex-direction: column; padding: max(14px, env(safe-area-inset-top)) 0 0; }
+  header { text-align: center; padding: 6px 20px 0; }
+  h1 { font-size: 22px; letter-spacing: .14em; color: var(--gold); margin: 6px 0 4px; font-weight: 700; text-transform: uppercase; }
+  .q { font-weight: 400; font-style: italic; color: var(--dim); font-size: 15px; line-height: 1.35; min-height: 20px; margin: 0 auto; max-width: 420px; }
+  .hint { color: var(--dim); font-size: 14px; margin-top: 8px; transition: opacity .4s; }
+
+  /* слоты для выбранных карт */
+  #slots { display: flex; justify-content: center; gap: 14px; margin: 18px 0 6px; min-height: calc(var(--card-h) * 1.12 + 34px); }
+  .slot { width: calc(var(--card-w) * 1.12); text-align: center; }
+  .slot .frame { width: 100%; height: calc(var(--card-h) * 1.12); border: 1.5px dashed var(--gold-soft); border-radius: 10px;
+    perspective: 900px; position: relative; }
+  .slot .label { font-size: 13px; color: var(--gold); margin-top: 8px; letter-spacing: .08em; text-transform: uppercase; }
+  .slot .name { font-size: 13px; color: var(--text); min-height: 17px; margin-top: 3px; opacity: 0; transition: opacity .6s .5s; }
+  .slot.open .name { opacity: 1; }
+  .flip { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform 1s cubic-bezier(.3, .7, .2, 1.1); }
+  .slot.open .flip { transform: rotateY(180deg); }
+  .face, .backside { position: absolute; inset: 0; border-radius: 10px; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    background-size: cover; background-position: center; box-shadow: 0 0 18px var(--gold-soft); }
+  .backside { background-image: url("cards/back.webp"); }
+  .face { transform: rotateY(180deg); }
+
+  /* колода веером: горизонтальная прокрутка, карты изгибаются дугой */
+  #deckwrap { position: relative; flex: 1; min-height: 230px; }
+  #deck { position: absolute; left: 0; right: 0; bottom: 0; top: 0; overflow-x: auto; overflow-y: hidden;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  #deck::-webkit-scrollbar { display: none; }
+  #track { position: relative; height: 100%; }
+  .card { position: absolute; bottom: 70px; width: var(--card-w); height: var(--card-h); border-radius: 9px;
+    background: url("cards/back.webp") center / cover; box-shadow: 0 6px 16px rgba(0, 0, 0, .55), 0 0 0 1px rgba(232, 196, 120, .25);
+    transform-origin: 50% 260%; will-change: transform; transition: opacity .35s, filter .3s; }
+  .card.taken { opacity: 0; pointer-events: none; }
+  .card:active { filter: brightness(1.25); }
+  .flyer { position: fixed; z-index: 10; border-radius: 9px; background: url("cards/back.webp") center / cover;
+    box-shadow: 0 0 28px var(--gold); transition: all .7s cubic-bezier(.25, .8, .25, 1); pointer-events: none; }
+  .count { position: absolute; left: 0; right: 0; bottom: 30px; text-align: center; color: var(--dim); font-size: 13px; letter-spacing: .06em; }
+
+  #go { position: fixed; left: 20px; right: 20px; bottom: max(18px, env(safe-area-inset-bottom)); height: 54px; border: 0; border-radius: 16px;
+    font-family: inherit; font-size: 19px; font-weight: 700; letter-spacing: .06em; color: #2a1a05;
+    background: linear-gradient(180deg, #f7dd9c, #d9ad5b); box-shadow: 0 6px 24px rgba(232, 196, 120, .35);
+    transform: translateY(140%); transition: transform .5s cubic-bezier(.2, .9, .3, 1.2); z-index: 20; }
+  #go.show { transform: none; }
+  .shuffle-anim .card { transition: transform .5s ease; }
+</style>
 </head>
 <body>
-    <h1>Сайт для обмена Telegram</h1>
+<div id="stars"></div>
+<main>
+  <header>
+    <h1 id="title">Твоя колода</h1>
+    <p class="q" id="question"></p>
+    <div class="hint" id="hint">Листай колоду и тяни карты, к которым тянется рука</div>
+  </header>
+  <div id="slots"></div>
+  <div id="deckwrap">
+    <div id="deck"><div id="track"></div></div>
+    <div class="count" id="count">78 карт перетасованы под твой вопрос</div>
+  </div>
+</main>
+<button id="go">Открыть карты</button>
+
+<script>
+const tg = window.Telegram?.WebApp;
+tg?.ready(); tg?.expand(); tg?.setHeaderColor?.("#0e0a1c"); tg?.setBackgroundColor?.("#0e0a1c");
+const P = new URLSearchParams(location.search);
+const deck = (P.get("d") || "").split(",").filter(Boolean);       // порядок 78 карт — перетасован ботом под вопрос
+const names = typeof NAMES === "object" ? NAMES : {};  // код → русское название (names.js)
+const need = +(P.get("n") || 3);
+const labels = (P.get("l") || (need === 1 ? "Ответ" : "Суть,Что поможет,Итог")).split(",");
+document.getElementById("question").textContent = P.get("q") ? `«${P.get("q")}»` : "";
+if (P.get("t")) document.getElementById("title").textContent = P.get("t");
+const haptic = (k = "light") => tg?.HapticFeedback?.impactOccurred(k);
+
+// звёзды
+const sky = document.getElementById("stars");
+for (let i = 0; i < 90; i++) {
+  const s = document.createElement("div"); s.className = "star";
+  s.style.left = Math.random() * 100 + "%"; s.style.top = Math.random() * 100 + "%";
+  s.style.setProperty("--t", 2 + Math.random() * 4 + "s"); s.style.setProperty("--d", -Math.random() * 6 + "s");
+  if (Math.random() < .15) { s.style.width = s.style.height = "3px"; }
+  sky.appendChild(s);
+}
+
+// слоты
+const slots = document.getElementById("slots");
+const slotEls = labels.slice(0, need).map(l => {
+  const el = document.createElement("div"); el.className = "slot";
+  el.innerHTML = `<div class="frame"><div class="flip" style="opacity:0"><div class="backside"></div><div class="face"></div></div></div>
+                  <div class="label">${l}</div><div class="name"></div>`;
+  slots.appendChild(el); return el;
+});
+
+// колода
+const cardW = 92, gap = 34;
+const track = document.getElementById("track"), scroller = document.getElementById("deck");
+const total = deck.length || 78;
+const pad = () => scroller.clientWidth / 2 - cardW / 2;
+const cards = [];
+function layout() {
+  track.style.width = (pad() * 2 + (total - 1) * gap + cardW) + "px";
+  cards.forEach((c, i) => c.style.left = (pad() + i * gap) + "px");
+  bend();
+}
+for (let i = 0; i < total; i++) {
+  const c = document.createElement("div"); c.className = "card"; c.dataset.i = i;
+  c.addEventListener("click", () => take(c)); track.appendChild(c); cards.push(c);
+}
+function bend() {  // дуга: чем дальше от центра экрана, тем сильнее наклон и ниже карта
+  const center = scroller.scrollLeft + scroller.clientWidth / 2;
+  for (const c of cards) {
+    const x = parseFloat(c.style.left) + cardW / 2 - center;
+    const k = Math.max(-1, Math.min(1, x / (scroller.clientWidth * .75)));
+    c.style.transform = `rotate(${k * 26}deg) translateY(${Math.abs(k) * 18}px)`;
+    c.style.zIndex = 1000 - Math.round(Math.abs(x));
+  }
+}
+scroller.addEventListener("scroll", () => requestAnimationFrame(bend), { passive: true });
+window.addEventListener("resize", layout);
+layout();
+scroller.scrollLeft = (track.scrollWidth - scroller.clientWidth) / 2;
+// лёгкий «пролёт» колоды при открытии — видно, что карт много
+setTimeout(() => scroller.scrollTo({ left: scroller.scrollLeft + 260, behavior: "smooth" }), 450);
+setTimeout(() => scroller.scrollTo({ left: (track.scrollWidth - scroller.clientWidth) / 2, behavior: "smooth" }), 1300);
+
+const picks = [];
+function take(card) {
+  if (picks.length >= need || card.classList.contains("taken")) return;
+  haptic("medium");
+  const slot = slotEls[picks.length];
+  picks.push(+card.dataset.i);
+  const pre = new Image(); pre.src = `cards/${deck[+card.dataset.i]}.webp`;  // лицо карты — заранее, чтобы переворот был мгновенным
+  const from = card.getBoundingClientRect(), to = slot.querySelector(".frame").getBoundingClientRect();
+  const fly = document.createElement("div"); fly.className = "flyer";
+  Object.assign(fly.style, { left: from.left + "px", top: from.top + "px", width: from.width + "px", height: from.height + "px",
+                             transform: getComputedStyle(card).transform });
+  document.body.appendChild(fly); card.classList.add("taken");
+  requestAnimationFrame(() => requestAnimationFrame(() => Object.assign(fly.style, {
+    left: to.left + "px", top: to.top + "px", width: to.width + "px", height: to.height + "px", transform: "none" })));
+  setTimeout(() => { slot.querySelector(".flip").style.opacity = 1; fly.remove(); }, 720);
+  const left = need - picks.length;
+  document.getElementById("count").textContent = left ? `Осталось выбрать: ${left}` : "Карты выбраны";
+  document.getElementById("hint").style.opacity = left ? 1 : 0;
+  if (!left) setTimeout(() => document.getElementById("go").classList.add("show"), 600);
+}
+
+let opened = false;
+document.getElementById("go").addEventListener("click", () => {
+  if (!opened) {
+    opened = true; haptic("heavy");
+    picks.forEach((p, k) => {
+      const code = deck[p], slot = slotEls[k];
+      slot.querySelector(".face").style.backgroundImage = `url("cards/${code}.webp")`;
+      slot.querySelector(".name").textContent = names[code] || "";
+      setTimeout(() => { slot.classList.add("open"); haptic("light"); }, 250 + k * 450);
+    });
+    document.getElementById("go").textContent = "Получить толкование";
+    document.getElementById("count").textContent = "";
+    return;
+  }
+  haptic("medium");
+  const data = JSON.stringify({ p: picks });
+  if (tg?.sendData) tg.sendData(data); else alert("Выбраны карты: " + picks.map(p => deck[p]).join(", "));
+});
+
+</script>
 </body>
 </html>
